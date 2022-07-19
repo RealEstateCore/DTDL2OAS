@@ -27,7 +27,7 @@ namespace DTDL2OAS
 
         // Data fields
         private static IReadOnlyDictionary<Dtmi, DTEntityInfo> DTEntities;
-        private static Dictionary<string, Dtmi> EndpointMappings;
+        private static Dictionary<string, Dtmi> EndpointMappings = new();
 
         static void Main(string[] args)
         {
@@ -44,29 +44,25 @@ namespace DTDL2OAS
                        Environment.Exit(1);
                    });
 
-            LoadInput(_inputPath);
-            LoadMappings(_mappingsPath);
+            LoadInput();
+            LoadMappings();
 
-            Console.WriteLine("Parsed DTMIs:");
-            foreach (Dtmi dtmi in DTEntities.Keys)
-            {
-                Console.WriteLine($"\t{dtmi}");
-            }
+            Console.WriteLine("Hello, world!");
         }
 
         // Load a file or a directory of files from disk
-        private static void LoadInput(string path)
+        private static void LoadInput()
         {
             // Get selected file or, if directory selected, all JSON files in selected dir
             IEnumerable<FileInfo> sourceFiles;
-            if (File.GetAttributes(path) == FileAttributes.Directory)
+            if (File.GetAttributes(_inputPath) == FileAttributes.Directory)
             {
-                DirectoryInfo directoryInfo = new DirectoryInfo(path);
+                DirectoryInfo directoryInfo = new DirectoryInfo(_inputPath);
                 sourceFiles = directoryInfo.EnumerateFiles("*.json", SearchOption.AllDirectories);
             }
             else
             {
-                FileInfo singleSourceFile = new FileInfo(path);
+                FileInfo singleSourceFile = new FileInfo(_inputPath);
                 sourceFiles = new[] { singleSourceFile };
             }
 
@@ -91,9 +87,27 @@ namespace DTDL2OAS
             }
         }
 
-        private static void LoadMappings(string mappingsPath)
+        private static void LoadMappings()
         {
-
+            using (var reader = new StreamReader(_mappingsPath))
+            {
+                string mappingsCsv = reader.ReadToEnd();
+                string[] mappings = mappingsCsv.Split(Environment.NewLine);
+                // Skipping first row b/c headers
+                for (int i = 1; i < mappings.Length; i++)
+                {
+                    string mapping = mappings[i];
+                    // Last line of file might be empty
+                    if (mapping.Length == 0) continue;
+                    string mappedEndpoint = mapping.Split(';').First();
+                    string mappedDtmiString = mapping.Substring(mappedEndpoint.Length + 1).Trim('\"');
+                    Dtmi mappedDtmi = new Dtmi(mappedDtmiString);
+                    if (DTEntities.ContainsKey(mappedDtmi))
+                    {
+                        EndpointMappings.Add(mappedEndpoint, mappedDtmi);
+                    }
+                }
+            }
         }
     }
 }
