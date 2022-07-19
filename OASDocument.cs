@@ -5,7 +5,7 @@ namespace DTDL2OAS
 {
     internal class OASDocument
     {
-        public readonly string openapi = "3.0.2";
+        public readonly string openapi = "3.0.3";
         public Info info;
         public Components components;
 
@@ -14,17 +14,25 @@ namespace DTDL2OAS
 
         public class Info
         {
-            [YamlMember(ScalarStyle = ScalarStyle.DoubleQuoted, Alias = "version")]
-            public string Version { get; set; }
+            [YamlMember(ScalarStyle = ScalarStyle.DoubleQuoted)]
+            public string version;
             public string title;
             public License license;
-            public string description;
+            public Contact contact;
+            public string Description { get; set; }
         }
 
         public class License
         {
             public string name;
             public string url;
+        }
+
+        public class Contact
+        {
+            public string name;
+            public string url;
+            public string email;
         }
 
         public class Parameter
