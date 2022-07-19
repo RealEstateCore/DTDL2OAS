@@ -69,7 +69,7 @@ namespace DTDL2OAS
             // Dump output as YAML
             var serializer = new SerializerBuilder()
                 .DisableAliases()
-                .WithNamingConvention(LowerCaseNamingConvention.Instance)
+                .WithNamingConvention(CamelCaseNamingConvention.Instance)
                 .ConfigureDefaultValuesHandling(DefaultValuesHandling.OmitNull)
                 .Build();
             var yaml = serializer.Serialize(OutputDocument);
