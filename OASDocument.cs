@@ -19,7 +19,7 @@ namespace DTDL2OAS
             public string title;
             public License license;
             public Contact contact;
-            public string Description { get; set; }
+            public string description;
         }
 
         public class License

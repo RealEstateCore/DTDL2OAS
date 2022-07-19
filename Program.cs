@@ -70,6 +70,7 @@ namespace DTDL2OAS
             var serializer = new SerializerBuilder()
                 .DisableAliases()
                 .WithNamingConvention(LowerCaseNamingConvention.Instance)
+                .ConfigureDefaultValuesHandling(DefaultValuesHandling.OmitNull)
                 .Build();
             var yaml = serializer.Serialize(OutputDocument);
             File.WriteAllText(_outputPath, yaml);
@@ -207,7 +208,7 @@ namespace DTDL2OAS
             // Description; non-mandatory
             if (OntologyAnnotations.ContainsKey("description"))
             {
-                docInfo.Description = OntologyAnnotations["description"];
+                docInfo.description = OntologyAnnotations["description"];
             }
 
             return docInfo;
