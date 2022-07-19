@@ -1,11 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using YamlDotNet.Core;
+﻿using YamlDotNet.Core;
 using YamlDotNet.Serialization;
 
-namespace OWL2OAS
+namespace DTDL2OAS
 {
-    class OASDocument
+    internal class OASDocument
     {
         public readonly string openapi = "3.0.2";
         public Info info;
