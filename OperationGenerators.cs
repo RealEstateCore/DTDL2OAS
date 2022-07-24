@@ -8,7 +8,7 @@ namespace DTDL2OAS
 {
     internal class OperationGenerators
     {
-        internal static OASDocument.Operation GenerateGetEntityByIdOperation(string endpointName, string interfaceLabel)
+        internal static OASDocument.Operation GenerateGetEntityByIdOperation(string endpointName, string schemaName, string interfaceLabel)
         {
             OASDocument.Operation getOperation = new OASDocument.Operation();
             getOperation.summary = $"Get a specific '{interfaceLabel}' object.";
@@ -47,12 +47,13 @@ namespace DTDL2OAS
 
             // Response is per previously defined schema
             // TODO: FIXME
+            content200.schema = new OASDocument.ReferenceSchema(schemaName);
             //content200.schema = MergeAtomicSchemaWithContextAndRequiredProperties(interfaceLabel);
 
             return getOperation;
         }
 
-        internal static OASDocument.Operation GeneratePostEntityOperation(string endpointName, string interfaceLabel)
+        internal static OASDocument.Operation GeneratePostEntityOperation(string endpointName, string schemaName, string interfaceLabel)
         {
             OASDocument.Operation postOperation = new OASDocument.Operation();
             postOperation.summary = $"Create a new '{interfaceLabel}' object.";
@@ -69,6 +70,7 @@ namespace DTDL2OAS
                         "application/ld+json", new OASDocument.Content
                         {
                             // TODO: FIXME
+                            schema = new OASDocument.ReferenceSchema(schemaName)
                             //schema = MergeAtomicSchemaWithContext(classLabel)
                         }
                     }

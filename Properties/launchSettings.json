@@ -2,7 +2,7 @@
   "profiles": {
     "DTDL2OAS": {
       "commandName": "Project",
-      "commandLineArgs": "-i C:\\REC4\\Ontology\\DTDL -a C:\\REC4\\Ontology\\DTDL\\Annotations.txt -m C:\\REC4\\API\\REST\\Mappings.csv -o C:\\REC4\\API\\REST\\REC4API.yaml"
+      "commandLineArgs": "-i C:\\REC4\\Ontology\\DTDL -a C:\\REC4\\Ontology\\DTDL\\Annotations.txt -m C:\\REC4\\API\\REST\\Mappings.csv -n C:\\REC4\\API\\REST\\NamespaceAbbreviations.txt -o C:\\REC4\\API\\REST\\REC4API.yaml"
     }
   }
 }

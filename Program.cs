@@ -20,6 +20,8 @@ namespace DTDL2OAS
             public string AnnotationsPath { get; set; }
             [Option('m', "mappingsPath", Required = true, HelpText = "Path to mappings CSV file matching endpoint names to DTDL Interfaces.")]
             public string MappingsPath { get; set; }
+            [Option('n', "namespaceAbbreviationsPath", Required = false, HelpText = "Path to file mapping ontology namespace prefixes to abbreviations.")]
+            public string NamespaceAbbreviationsPath { get; set; }
             [Option('o', "outputPath", Required = true, HelpText = "The path at which to put the generated OAS file.")]
             public string OutputPath { get; set; }
         }
@@ -29,11 +31,13 @@ namespace DTDL2OAS
         private static string _inputPath;
         private static string _annotationsPath;
         private static string _mappingsPath;
+        private static string _namespaceAbbreviationsPath;
         private static string _outputPath;
 
         // Data fields
         private static IReadOnlyDictionary<Dtmi, DTEntityInfo> DTEntities;
         private static Dictionary<string, string> OntologyAnnotations = new();
+        private static Dictionary<string, string> NamespaceAbbreviations = new();
         private static Dictionary<string, Dtmi> EndpointMappings = new();
         private static OASDocument OutputDocument;
 
@@ -46,6 +50,7 @@ namespace DTDL2OAS
                        _inputPath = o.InputPath;
                        _annotationsPath = o.AnnotationsPath;
                        _mappingsPath = o.MappingsPath;
+                       _namespaceAbbreviationsPath = o.NamespaceAbbreviationsPath;
                        _outputPath = o.OutputPath;
                    })
                    .WithNotParsed((errs) =>
@@ -56,6 +61,8 @@ namespace DTDL2OAS
             LoadInput();
             LoadAnnotations();
             LoadMappings();
+            if (_namespaceAbbreviationsPath != null)
+                LoadNamespaceAbbreviations();
 
             // Create OAS object, create OAS info header, server block, (empty) components/schemas structure, and LoadedOntologies endpoint
             OutputDocument = new OASDocument
@@ -66,6 +73,7 @@ namespace DTDL2OAS
                 paths = new Dictionary<string, OASDocument.Path>()
             };
 
+            GenerateSchemas();
             GeneratePaths();
 
             // Dump output as YAML
@@ -170,6 +178,22 @@ namespace DTDL2OAS
             }
         }
 
+        private static void LoadNamespaceAbbreviations()
+        {
+            using (var reader = new StreamReader(_namespaceAbbreviationsPath))
+            {
+                string[] abbreviationMappings = reader.ReadToEnd().Split(Environment.NewLine);
+                foreach (string abbreviationMapping in abbreviationMappings)
+                {
+                    // Last line of file might be empty
+                    if (abbreviationMapping.Length == 0) continue;
+                    string namespacePrefix = abbreviationMapping.Split('=').First();
+                    string namespaceAbbreviation = abbreviationMapping.Substring(namespacePrefix.Length + 1);
+                    NamespaceAbbreviations.Add(namespacePrefix, namespaceAbbreviation);
+                }
+            }
+        }
+
         private static OASDocument.Info GenerateDocumentInfo()
         {
             OASDocument.Info docInfo = new OASDocument.Info();
@@ -216,6 +240,39 @@ namespace DTDL2OAS
             return docInfo;
         }
 
+        private static void GenerateSchemas()
+        {
+            foreach (Dtmi dtmi in EndpointMappings.Values)
+            {
+                DTInterfaceInfo dtInterface = (DTInterfaceInfo)DTEntities[dtmi];
+                
+                // Get schema name
+                string schemaName = GetApiName(dtInterface).Replace(":", "_", StringComparison.Ordinal);
+
+                // Create schema for class and corresponding properties dict
+                OASDocument.ComplexSchema schema = new OASDocument.ComplexSchema();
+                schema.properties = new Dictionary<string, OASDocument.Schema>();
+
+                // Add @id for all entries
+                OASDocument.PrimitiveSchema idSchema = new OASDocument.PrimitiveSchema();
+                idSchema.type = "string";
+                schema.properties.Add("@id", idSchema);
+
+                // Add @type for all entries
+                OASDocument.PrimitiveSchema typeSchema = new OASDocument.PrimitiveSchema
+                {
+                    type = "string",
+                    DefaultValue = dtInterface.Id.AbsoluteUri
+                };
+                schema.properties.Add("@type", typeSchema);
+
+                // TODO: Create schema contents
+
+                // Append schema to output document
+                OutputDocument.components.schemas.Add(schemaName, schema);
+            }
+        }
+
         private static void GeneratePaths()
         {
             // Iterate over all classes
@@ -225,16 +282,17 @@ namespace DTDL2OAS
                 string endpointName = endpointMapping.Key;
                 DTInterfaceInfo dtInterface = (DTInterfaceInfo)DTEntities[endpointMapping.Value];
                 string interfaceLabel = GetDocumentationName(dtInterface);
+                string interfaceSchemaName = GetApiName(dtInterface);
 
                 // Create paths and corresponding operations for class
                 OutputDocument.paths.Add($"/{endpointName}", new OASDocument.Path
                 {
                     get = OperationGenerators.GenerateGetEntitiesOperation(endpointName, interfaceLabel/*, oClass*/),
-                    post = OperationGenerators.GeneratePostEntityOperation(endpointName, interfaceLabel)
+                    post = OperationGenerators.GeneratePostEntityOperation(endpointName, interfaceSchemaName, interfaceLabel)
                 });
                 OutputDocument.paths.Add($"/{endpointName}/{{id}}", new OASDocument.Path
                 {
-                    get = OperationGenerators.GenerateGetEntityByIdOperation(endpointName, interfaceLabel),
+                    get = OperationGenerators.GenerateGetEntityByIdOperation(endpointName, interfaceSchemaName, interfaceLabel),
                     patch = OperationGenerators.GeneratePatchToIdOperation(endpointName, interfaceLabel),
                     put = OperationGenerators.GeneratePutToIdOperation(endpointName, interfaceLabel),
                     delete = OperationGenerators.GenerateDeleteByIdOperation(endpointName, interfaceLabel)
@@ -252,6 +310,20 @@ namespace DTDL2OAS
             if (displayNames.Count > 0)
                 return displayNames.First().Value;
             return interfaceInfo.Id.Versionless;
+        }
+
+        private static string GetApiName(DTEntityInfo entityInfo)
+        {
+            if (entityInfo is DTNamedEntityInfo)
+                return (entityInfo as DTNamedEntityInfo).Name;
+
+            string versionLessDtmi = entityInfo.Id.Versionless;
+            string entityNamespace = versionLessDtmi.Substring(0, versionLessDtmi.LastIndexOf(':'));
+            string entityId = versionLessDtmi.Substring(versionLessDtmi.LastIndexOf(':') + 1);
+            if (NamespaceAbbreviations.ContainsKey(entityNamespace))
+                return NamespaceAbbreviations[entityNamespace] + ":" + entityId;
+
+            return versionLessDtmi.Split(':').Last();
         }
     }
 }
