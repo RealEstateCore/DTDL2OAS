@@ -66,6 +66,8 @@ namespace DTDL2OAS
                 paths = new Dictionary<string, OASDocument.Path>()
             };
 
+            GeneratePaths();
+
             // Dump output as YAML
             var serializer = new SerializerBuilder()
                 .DisableAliases()
@@ -212,6 +214,44 @@ namespace DTDL2OAS
             }
 
             return docInfo;
+        }
+
+        private static void GeneratePaths()
+        {
+            // Iterate over all classes
+            foreach (KeyValuePair<string,Dtmi> endpointMapping in EndpointMappings)
+            {
+                // Get key name for API
+                string endpointName = endpointMapping.Key;
+                DTInterfaceInfo dtInterface = (DTInterfaceInfo)DTEntities[endpointMapping.Value];
+                string interfaceLabel = GetDocumentationName(dtInterface);
+
+                // Create paths and corresponding operations for class
+                OutputDocument.paths.Add($"/{endpointName}", new OASDocument.Path
+                {
+                    get = OperationGenerators.GenerateGetEntitiesOperation(endpointName, interfaceLabel/*, oClass*/),
+                    post = OperationGenerators.GeneratePostEntityOperation(endpointName, interfaceLabel)
+                });
+                OutputDocument.paths.Add($"/{endpointName}/{{id}}", new OASDocument.Path
+                {
+                    get = OperationGenerators.GenerateGetEntityByIdOperation(endpointName, interfaceLabel),
+                    patch = OperationGenerators.GeneratePatchToIdOperation(endpointName, interfaceLabel),
+                    put = OperationGenerators.GeneratePutToIdOperation(endpointName, interfaceLabel),
+                    delete = OperationGenerators.GenerateDeleteByIdOperation(endpointName, interfaceLabel)
+                });
+            }
+        }
+
+        private static string GetDocumentationName(DTInterfaceInfo interfaceInfo)
+        {
+            IReadOnlyDictionary<string, string> displayNames = interfaceInfo.DisplayName;
+            if (displayNames.ContainsKey(""))
+                return displayNames[""];
+            if (displayNames.ContainsKey("en"))
+                return displayNames["en"];
+            if (displayNames.Count > 0)
+                return displayNames.First().Value;
+            return interfaceInfo.Id.Versionless;
         }
     }
 }
