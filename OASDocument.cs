@@ -96,7 +96,7 @@ namespace DTDL2OAS
                             type = "integer",
                             format = "int32",
                             minimum = "0",
-                            maximum = 100,
+                            maximum = "100",
                             DefaultValue = "20"
                         }
                     }
@@ -115,6 +115,36 @@ namespace DTDL2OAS
             };
             public Dictionary<string, Schema> schemas = new Dictionary<string, Schema>
             {
+                // Add Hydra Colletions wrapper schema
+                {"HydraCollectionWrapper",
+                    new ComplexSchema
+                    {
+                        required = new List<string>
+                        {
+                            "@context",
+                            "@type",
+                            "hydra:member"
+                        },
+                        properties = new Dictionary<string, OASDocument.Schema>
+                        {
+                            {"@context", new ReferenceSchema("Context") },
+                            {"@type", new PrimitiveSchema { type="string", DefaultValue="hydra:Collection"} },
+                            {"hydra:totalItems", new PrimitiveSchema { type="integer" } },
+                            {"hydra:view", new ComplexSchema
+                            {
+                                properties = new Dictionary<string, Schema>
+                                {
+                                    {"@id", new PrimitiveSchema { type="string", format="uri"} },
+                                    {"@type", new PrimitiveSchema { type="string", DefaultValue="hydra:PartialCollectionView"} },
+                                    {"hydra:first", new PrimitiveSchema { type="string"} },
+                                    {"hydra:previous", new PrimitiveSchema { type="string"} },
+                                    {"hydra:next", new PrimitiveSchema { type="string"} },
+                                    {"hydra:last", new PrimitiveSchema { type="string"} },
+                                }
+                            } }
+                        }
+                    }
+                },
                 // Add the default query operator filter schemas
                 {"IntegerFilter", new ComplexSchema {
                     properties = new Dictionary<string, Schema>
@@ -185,7 +215,7 @@ namespace DTDL2OAS
             public string type;
             public string format;
             public string minimum;
-            public int maximum;
+            public string maximum;
             [YamlMember(Alias = "default")]
             public string DefaultValue { get; set; }
             [YamlMember(Alias = "enum")]

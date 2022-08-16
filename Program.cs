@@ -62,7 +62,9 @@ namespace DTDL2OAS
             LoadAnnotations();
             LoadMappings();
             if (_namespaceAbbreviationsPath != null)
+            {
                 LoadNamespaceAbbreviations();
+            }
 
             // Create OAS object, create OAS info header, server block, (empty) components/schemas structure, and LoadedOntologies endpoint
             OutputDocument = new OASDocument
@@ -76,11 +78,14 @@ namespace DTDL2OAS
             GenerateSchemas();
             GeneratePaths();
 
+            // Generate and add context schema
+            OutputDocument.components.schemas.Add("Context", GenerateContextSchema());
+
             // Dump output as YAML
             var serializer = new SerializerBuilder()
                 .DisableAliases()
                 .WithNamingConvention(CamelCaseNamingConvention.Instance)
-                .ConfigureDefaultValuesHandling(DefaultValuesHandling.OmitNull)
+                .ConfigureDefaultValuesHandling(DefaultValuesHandling.OmitDefaults)
                 .Build();
             var yaml = serializer.Serialize(OutputDocument);
             File.WriteAllText(_outputPath, yaml);
@@ -256,6 +261,7 @@ namespace DTDL2OAS
                 // Add @id for all entries
                 OASDocument.PrimitiveSchema idSchema = new OASDocument.PrimitiveSchema();
                 idSchema.type = "string";
+
                 schema.properties.Add("@id", idSchema);
 
                 // Add @type for all entries
@@ -298,6 +304,47 @@ namespace DTDL2OAS
                     delete = OperationGenerators.GenerateDeleteByIdOperation(endpointName, interfaceLabel)
                 });
             }
+        }
+
+        private static OASDocument.Schema GenerateContextSchema()
+        {
+            // Set @context/@base (default data namespace)
+            OASDocument.PrimitiveSchema baseNamespaceSchema = new OASDocument.PrimitiveSchema
+            {
+                type = "string",
+                format = "uri"
+            };
+            // Hardcoded Hydra
+            OASDocument.PrimitiveSchema hydraSchema = new OASDocument.PrimitiveSchema
+            {
+                type = "string",
+                format = "uri",
+                DefaultValue = "http://www.w3.org/ns/hydra/core#"
+            };
+            // Mash it all together into a @context block
+            OASDocument.ComplexSchema contextSchema = new OASDocument.ComplexSchema
+            {
+                required = new List<string> { "@vocab", "@base", "hydra" },
+                properties = new Dictionary<string, OASDocument.Schema> {
+                    { "@base", baseNamespaceSchema },
+                    { "hydra", hydraSchema },
+                }
+            };
+            // Add each namespace abbreviation to the @context (sorting by shortname, e.g., dictionary value, for usability)
+            List<KeyValuePair<string, string>> namespaceAbbrevationsList = NamespaceAbbreviations.ToList();
+            namespaceAbbrevationsList.Sort((pair1, pair2) => string.CompareOrdinal(pair1.Value, pair2.Value));
+            foreach (KeyValuePair<string, string> namespaceAbbrevation in namespaceAbbrevationsList)
+            {
+                OASDocument.PrimitiveSchema importedVocabularySchema = new OASDocument.PrimitiveSchema
+                {
+                    type = "string",
+                    format = "uri",
+                    DefaultValue = namespaceAbbrevation.Key.ToString()
+                };
+                contextSchema.properties.Add(namespaceAbbrevation.Value, importedVocabularySchema);
+                contextSchema.required.Add(namespaceAbbrevation.Value);
+            }
+            return contextSchema;
         }
 
         private static string GetDocumentationName(DTInterfaceInfo interfaceInfo)
