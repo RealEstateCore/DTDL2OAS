@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.Azure.DigitalTwins.Parser.Models;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -97,7 +98,7 @@ namespace DTDL2OAS
             return postOperation;
         }
 
-        internal static OASDocument.Operation GenerateGetEntitiesOperation(string endpointName, string schemaName, string interfaceLabel)
+        internal static OASDocument.Operation GenerateGetEntitiesOperation(string endpointName, DTInterfaceInfo dtInterface, string schemaName, string interfaceLabel)
         {
 
             // Create Get
@@ -113,6 +114,103 @@ namespace DTDL2OAS
             getOperation.parameters.Add(new OASDocument.Parameter { ReferenceTo = "sortParam" });
 
             // Add parameters for each property field that can be expressed on this class
+            foreach (DTRelationshipInfo relationship in dtInterface.AllRelationships())
+            {
+                string RelationshipName = Program.GetApiName(relationship);
+                OASDocument.Parameter parameter = new OASDocument.Parameter
+                {
+                    name = RelationshipName,
+                    description = $"Filter value on relationship '{RelationshipName}'.",
+                    required = false,
+                    schema = new OASDocument.ReferenceSchema("StringFilter"),
+                    InField = OASDocument.Parameter.InFieldValues.query
+                };
+                getOperation.parameters.Add(parameter);
+            }
+            foreach (DTPropertyInfo property in dtInterface.AllProperties())
+            {
+                // Fall back to string representation for complex schemas
+                string propertyType = "string";
+                string propertyFormat = "";
+
+                // Check the schema type against predefined mapping
+                if (property.Schema is DTPrimitiveSchemaInfo)
+                {
+                    Type schemaType = property.Schema.GetType();
+                    if (Program.dtdlOsaMappings.ContainsKey(schemaType))
+                    {
+                        propertyType = Program.dtdlOsaMappings[schemaType].Item1;
+                        string format = Program.dtdlOsaMappings[schemaType].Item2;
+                        if (format.Length > 0)
+                        {
+                            propertyFormat = format;
+                        }
+                    }
+                }
+
+                // Select a filter schema to use for parameter formats where it is applicable
+                string filterSchema = "";
+                switch (propertyType)
+                {
+                    case "string":
+                        filterSchema = propertyFormat switch
+                        {
+                            "date-time" => "DateTimeFilter",
+                            _ => "StringFilter",
+                        };
+                        break;
+
+                    case "integer":
+                        filterSchema = "IntegerFilter";
+                        break;
+
+                    case "number":
+                        filterSchema = "NumberFilter";
+                        break;
+                }
+
+                // Base the property schema on the filter, if one was selected above
+                // Otherwise, just do a simple type-based schema, possibly with format if one was found
+                OASDocument.Schema propertySchema;
+                if (filterSchema.Length > 0)
+                {
+                    propertySchema = new OASDocument.ReferenceSchema(filterSchema);
+                }
+                else
+                {
+                    if (propertyFormat.Length > 0)
+                    {
+                        propertySchema = new OASDocument.PrimitiveSchema
+                        {
+                            type = propertyType,
+                            format = propertyFormat
+                        };
+                    }
+                    else
+                    {
+                        propertySchema = new OASDocument.PrimitiveSchema
+                        {
+                            type = propertyType
+                        };
+                    }
+                }
+
+                OASDocument.Parameter parameter = new OASDocument.Parameter
+                {
+                    name = property.Name,
+                    description = $"Filter value on property '{property.Name}'.",
+                    required = false,
+                    schema = propertySchema,
+                    InField = OASDocument.Parameter.InFieldValues.query
+                };
+
+                if (filterSchema.Length > 0)
+                {
+                    parameter.style = "deepObject";
+                }
+
+                getOperation.parameters.Add(parameter);
+            }
             /*
              * TODO: FIXME
             foreach (OntologyProperty property in oClass.IsExhaustiveDomainOfUniques()

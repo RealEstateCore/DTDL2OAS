@@ -41,6 +41,22 @@ namespace DTDL2OAS
         private static Dictionary<string, Dtmi> EndpointMappings = new();
         private static OASDocument OutputDocument;
 
+        /// <summary>
+        /// Dictionary mapping DTDL schema types to corresponding OSA data types and formats, see
+        /// https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.0.0.md#dataTypeFormat
+        /// </summary>
+        public static readonly Dictionary<Type, (string, string)> dtdlOsaMappings = new Dictionary<Type, (string, string)>
+        {
+            {typeof(DTBooleanInfo) ,("boolean","") },
+            {typeof(DTDateInfo),("string","date") },
+            {typeof(DTDateTimeInfo),("string","date-time") },
+            {typeof(DTDoubleInfo),("number","double") },
+            {typeof(DTFloatInfo),("number","float") },
+            {typeof(DTIntegerInfo),("integer","int32") },
+            {typeof(DTLongInfo),("integer","int64") },
+            {typeof(DTStringInfo),("string","") }
+        };
+
         static void Main(string[] args)
         {
             Parser.Default.ParseArguments<Options>(args)
@@ -293,7 +309,7 @@ namespace DTDL2OAS
                 // Create paths and corresponding operations for class
                 OutputDocument.paths.Add($"/{endpointName}", new OASDocument.Path
                 {
-                    get = OperationGenerators.GenerateGetEntitiesOperation(endpointName, interfaceSchemaName, interfaceLabel),
+                    get = OperationGenerators.GenerateGetEntitiesOperation(endpointName, dtInterface, interfaceSchemaName, interfaceLabel),
                     post = OperationGenerators.GeneratePostEntityOperation(endpointName, interfaceSchemaName, interfaceLabel)
                 });
                 OutputDocument.paths.Add($"/{endpointName}/{{id}}", new OASDocument.Path
@@ -359,7 +375,7 @@ namespace DTDL2OAS
             return interfaceInfo.Id.Versionless;
         }
 
-        private static string GetApiName(DTEntityInfo entityInfo)
+        public static string GetApiName(DTEntityInfo entityInfo)
         {
             if (entityInfo is DTNamedEntityInfo)
                 return (entityInfo as DTNamedEntityInfo).Name;
