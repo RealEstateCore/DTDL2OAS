@@ -299,7 +299,7 @@ namespace DTDL2OAS
                 OutputDocument.paths.Add($"/{endpointName}/{{id}}", new OASDocument.Path
                 {
                     get = OperationGenerators.GenerateGetEntityByIdOperation(endpointName, interfaceSchemaName, interfaceLabel),
-                    patch = OperationGenerators.GeneratePatchToIdOperation(endpointName, interfaceLabel),
+                    patch = OperationGenerators.GeneratePatchToIdOperation(endpointName, interfaceSchemaName, interfaceLabel),
                     put = OperationGenerators.GeneratePutToIdOperation(endpointName, interfaceLabel),
                     delete = OperationGenerators.GenerateDeleteByIdOperation(endpointName, interfaceLabel)
                 });

@@ -69,9 +69,7 @@ namespace DTDL2OAS
                     {
                         "application/ld+json", new OASDocument.Content
                         {
-                            // TODO: FIXME
-                            schema = new OASDocument.ReferenceSchema(schemaName)
-                            //schema = MergeAtomicSchemaWithContext(classLabel)
+                            schema = MergeInterfaceSchemaWithContext(schemaName)
                         }
                     }
                 }
@@ -96,8 +94,7 @@ namespace DTDL2OAS
             response201.content.Add("application/ld+json", content201);
 
             // Response is per previously defined schema
-            // TODO: FIXME
-            //content201.schema = MergeAtomicSchemaWithContextAndRequiredProperties(interfaceLabel);
+            content201.schema = MergeInterfaceSchemaWithContext(schemaName);
 
             return postOperation;
         }
@@ -274,7 +271,7 @@ namespace DTDL2OAS
             return getOperation;
         }
 
-        internal static OASDocument.Operation GeneratePatchToIdOperation(string endpointName, string interfaceLabel)
+        internal static OASDocument.Operation GeneratePatchToIdOperation(string endpointName, string schemaName, string interfaceLabel)
         {
             OASDocument.Operation patchOperation = new OASDocument.Operation();
             patchOperation.summary = $"Update a single property on a specific '{interfaceLabel}' object.";
@@ -295,28 +292,24 @@ namespace DTDL2OAS
             patchOperation.parameters.Add(idParameter);
 
             // Create patch schema
-            // TODO: Fixme
-            /*OASDocument.ReferenceSchema contextReferenceSchema = new OASDocument.ReferenceSchema("Context");
+            OASDocument.ReferenceSchema contextReferenceSchema = new OASDocument.ReferenceSchema("Context");
             OASDocument.ComplexSchema contextPropertySchema = new OASDocument.ComplexSchema
             {
                 required = new List<string> { "@context" },
                 properties = new Dictionary<string, OASDocument.Schema>() { { "@context", contextReferenceSchema } }
-            };*/
+            };
 
-            /*
-             * TODO: FIXME
             OASDocument.Schema patchSchema = new OASDocument.AllOfSchema
             {
                 allOf = new OASDocument.Schema[] {
-                        // TODO: FIXME
-                        //contextPropertySchema,
-                        new OASDocument.ReferenceSchema(interfaceLabel),
+                        contextPropertySchema,
+                        new OASDocument.ReferenceSchema(schemaName),
                         new OASDocument.ComplexSchema {
                             minProperties = 2,
                             maxProperties = 2
                         }
                     }
-            };*/
+            };
 
             // Add request body
             OASDocument.RequestBody body = new OASDocument.RequestBody
@@ -328,8 +321,7 @@ namespace DTDL2OAS
                     {
                         "application/ld+json", new OASDocument.Content
                         {
-                            // TODO:FIXME
-                            //schema = patchSchema
+                            schema = patchSchema
                         }
                     }
                 }
@@ -358,8 +350,7 @@ namespace DTDL2OAS
             response200.content.Add("application/ld+json", content200);
 
             // Response is per previously defined schema
-            // TODO: FIXME
-            //content200.schema = MergeAtomicSchemaWithContextAndRequiredProperties(interfaceLabel);
+            content200.schema = MergeInterfaceSchemaWithContext(schemaName);
 
             return patchOperation;
         }
@@ -464,6 +455,26 @@ namespace DTDL2OAS
             deleteOperation.responses.Add("200", response200);
 
             return deleteOperation;
+        }
+
+        private static OASDocument.Schema MergeInterfaceSchemaWithContext(string interfaceLabel)
+        {
+            OASDocument.AllOfSchema itemSchema = new OASDocument.AllOfSchema();
+            OASDocument.ReferenceSchema classSchema = new OASDocument.ReferenceSchema(interfaceLabel);
+            OASDocument.ReferenceSchema contextReferenceSchema = new OASDocument.ReferenceSchema("Context");
+            OASDocument.ComplexSchema contextPropertySchema = new OASDocument.ComplexSchema
+            {
+                required = new List<string> { "@context" },
+                properties = new Dictionary<string, OASDocument.Schema>() { { "@context", contextReferenceSchema } }
+            };
+
+            // Otherwise merge only with context
+            itemSchema.allOf = new OASDocument.Schema[]
+            {
+                contextPropertySchema,
+                classSchema
+            };
+            return itemSchema;
         }
     }
 }
