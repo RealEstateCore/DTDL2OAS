@@ -300,7 +300,7 @@ namespace DTDL2OAS
                 {
                     get = OperationGenerators.GenerateGetEntityByIdOperation(endpointName, interfaceSchemaName, interfaceLabel),
                     patch = OperationGenerators.GeneratePatchToIdOperation(endpointName, interfaceSchemaName, interfaceLabel),
-                    put = OperationGenerators.GeneratePutToIdOperation(endpointName, interfaceLabel),
+                    put = OperationGenerators.GeneratePutToIdOperation(endpointName, interfaceSchemaName, interfaceLabel),
                     delete = OperationGenerators.GenerateDeleteByIdOperation(endpointName, interfaceLabel)
                 });
             }

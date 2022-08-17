@@ -355,7 +355,7 @@ namespace DTDL2OAS
             return patchOperation;
         }
 
-        internal static OASDocument.Operation GeneratePutToIdOperation(string endpointName, string interfaceLabel)
+        internal static OASDocument.Operation GeneratePutToIdOperation(string endpointName, string schemaName, string interfaceLabel)
         {
             OASDocument.Operation putOperation = new OASDocument.Operation();
             putOperation.summary = $"Update an existing '{interfaceLabel}' entity.";
@@ -385,8 +385,7 @@ namespace DTDL2OAS
                     {
                         "application/ld+json", new OASDocument.Content
                         {
-                            // TODO: FIXME
-                            //schema = MergeAtomicSchemaWithContext(interfaceLabel)
+                            schema = MergeInterfaceSchemaWithContext(schemaName)
                         }
                     }
                 }
@@ -415,8 +414,7 @@ namespace DTDL2OAS
             response200.content.Add("application/ld+json", content200);
 
             // Response is per previously defined schema
-            // TODO: FIXME
-            //content200.schema = MergeAtomicSchemaWithContextAndRequiredProperties(interfaceLabel);
+            content200.schema = MergeInterfaceSchemaWithContext(schemaName);
 
             return putOperation;
         }
