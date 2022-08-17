@@ -288,9 +288,45 @@ namespace DTDL2OAS
                 };
                 schema.properties.Add("@type", typeSchema);
 
-                // TODO: Create schema contents
+                // Create relationship-based schema properties
+                foreach (DTRelationshipInfo relationship in dtInterface.AllRelationships())
+                {
+                    string relationshipName = GetApiName(relationship);
 
-                // Append schema to output document
+                    // Set the type of the property; locally defined named classes can be either URI or full schema representation
+                    OASDocument.ComplexSchema relationshipSchema = new OASDocument.ComplexSchema
+                    {
+                        properties = new Dictionary<string, OASDocument.Schema> {
+                                        { "@id", new OASDocument.PrimitiveSchema { type = "string" } },
+                                        { "@type", new OASDocument.PrimitiveSchema { type = "string" } }
+                                    },
+                        required = new List<string> { "@id" }
+                    };
+                    if (relationship.Target != null)
+                    {
+                        ((OASDocument.PrimitiveSchema)relationshipSchema.properties["@type"]).DefaultValue = relationship.Target.ToString();
+                    }
+
+                    if (relationship.MaxMultiplicity == 1)
+                    {
+                        schema.properties[relationshipName] = relationshipSchema;
+                    }
+                    else
+                    {
+                        OASDocument.ArraySchema propertyArraySchema = new OASDocument.ArraySchema();
+                        propertyArraySchema.items = relationshipSchema;
+                        if (relationship.MinMultiplicity.HasValue)
+                        {
+                            propertyArraySchema.minItems = relationship.MinMultiplicity.Value;
+                        }
+                        if (relationship.MaxMultiplicity.HasValue)
+                        {
+                            propertyArraySchema.maxItems = relationship.MaxMultiplicity.Value;
+                        }
+                        schema.properties[relationshipName] = propertyArraySchema;
+
+                    }
+                }
                 OutputDocument.components.schemas.Add(schemaName, schema);
             }
         }
