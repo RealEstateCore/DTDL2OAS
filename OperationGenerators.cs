@@ -46,9 +46,7 @@ namespace DTDL2OAS
             response200.content.Add("application/ld+json", content200);
 
             // Response is per previously defined schema
-            // TODO: FIXME
-            content200.schema = new OASDocument.ReferenceSchema(schemaName);
-            //content200.schema = MergeAtomicSchemaWithContextAndRequiredProperties(interfaceLabel);
+            content200.schema = MergeInterfaceSchemaWithContext(schemaName);
 
             return getOperation;
         }
