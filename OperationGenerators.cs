@@ -97,7 +97,7 @@ namespace DTDL2OAS
             return postOperation;
         }
 
-        internal static OASDocument.Operation GenerateGetEntitiesOperation(string endpointName, string interfaceLabel)
+        internal static OASDocument.Operation GenerateGetEntitiesOperation(string endpointName, string schemaName, string interfaceLabel)
         {
 
             // Create Get
@@ -238,12 +238,9 @@ namespace DTDL2OAS
             response200.content.Add("application/ld+json", content200);
 
             // Generate schema with required fields propped on via allOf (if any required fields exist)
-            // TODO: FIXME
-            // OASDocument.Schema classSchemaWithRequiredProperties = MergeAtomicSchemaWithRequiredProperties(classLabel);
+            OASDocument.Schema interfaceSchema = MergeInterfaceSchemaWithContext(schemaName);
 
             // Generate wrapper Hydra schema (https://www.hydra-cg.com/spec/latest/core/)
-            /*
-            TODO: FIXME
             OASDocument.Schema hydraSchema = new OASDocument.AllOfSchema
             {
                 allOf = new OASDocument.Schema[]
@@ -254,7 +251,7 @@ namespace DTDL2OAS
                         properties = new Dictionary<string, OASDocument.Schema>
                         {
                             {"hydra:member", new OASDocument.ArraySchema  {
-                                items = classSchemaWithRequiredProperties
+                                items = interfaceSchema
                             } }
                         }
                     }
@@ -263,7 +260,6 @@ namespace DTDL2OAS
 
             // Wrap responses in array
             content200.schema = hydraSchema;
-            */
 
             // Return
             return getOperation;

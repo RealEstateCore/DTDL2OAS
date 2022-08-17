@@ -293,7 +293,7 @@ namespace DTDL2OAS
                 // Create paths and corresponding operations for class
                 OutputDocument.paths.Add($"/{endpointName}", new OASDocument.Path
                 {
-                    get = OperationGenerators.GenerateGetEntitiesOperation(endpointName, interfaceLabel/*, oClass*/),
+                    get = OperationGenerators.GenerateGetEntitiesOperation(endpointName, interfaceSchemaName, interfaceLabel),
                     post = OperationGenerators.GeneratePostEntityOperation(endpointName, interfaceSchemaName, interfaceLabel)
                 });
                 OutputDocument.paths.Add($"/{endpointName}/{{id}}", new OASDocument.Path
