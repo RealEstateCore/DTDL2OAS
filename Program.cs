@@ -327,6 +327,33 @@ namespace DTDL2OAS
 
                     }
                 }
+                foreach (DTPropertyInfo property in dtInterface.AllProperties())
+                {
+                    string propertyName = GetApiName(property);
+
+                    // Fall back to string representation for complex schemas
+                    OASDocument.PrimitiveSchema outputPropertySchema = new OASDocument.PrimitiveSchema()
+                    {
+                        type = "string"
+                    };
+
+                    // Check the schema type against predefined mapping
+                    if (property.Schema is DTPrimitiveSchemaInfo)
+                    {
+                        Type schemaType = property.Schema.GetType();
+                        if (Program.dtdlOsaMappings.ContainsKey(schemaType))
+                        {
+                            outputPropertySchema.type = Program.dtdlOsaMappings[schemaType].Item1;
+                            string format = Program.dtdlOsaMappings[schemaType].Item2;
+                            if (format.Length > 0)
+                            {
+                                outputPropertySchema.format = format;
+                            }
+                        }
+                    }
+
+                    schema.properties[propertyName] = outputPropertySchema;
+                }
                 OutputDocument.components.schemas.Add(schemaName, schema);
             }
         }
