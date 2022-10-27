@@ -2,6 +2,9 @@
 using Microsoft.Azure.DigitalTwins.Parser;
 using Microsoft.Azure.DigitalTwins.Parser.Models;
 using System.Text;
+using System.Xml;
+using System.Xml.Linq;
+using System.Xml.XPath;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
@@ -13,31 +16,34 @@ namespace DTDL2OAS
         public class Options
         {
             [Option('s', "server", Default = "http://localhost:8080/", Required = false, HelpText = "The server URL (where presumably an API implementation is running).")]
-            public string Server { get; set; }
+            public string? Server { get; set; }
             [Option('i', "inputPath", Required = true, HelpText = "The path to the ontology root directory or file to translate.")]
-            public string InputPath { get; set; }
-            [Option('a', "annotationsPath", Required = true, HelpText = "Path to ontology annotations file detaililing, e.g., version, license, etc.")]
-            public string AnnotationsPath { get; set; }
-            [Option('m', "mappingsPath", Required = true, HelpText = "Path to mappings CSV file matching endpoint names to DTDL Interfaces.")]
-            public string MappingsPath { get; set; }
-            [Option('n', "namespaceAbbreviationsPath", Required = false, HelpText = "Path to file mapping ontology namespace prefixes to abbreviations.")]
-            public string NamespaceAbbreviationsPath { get; set; }
-            [Option('o', "outputPath", Required = true, HelpText = "The path at which to put the generated OAS file.")]
-            public string OutputPath { get; set; }
+            public string? InputPath { get; set; }
+            [Option('n', "nuspecPath", Required = true, HelpText = "Path to .nuspec file holding package annotations detailing, e.g., version, license, etc.")]
+            public string? NuspecPath { get; set; }
+            /*[Option('a', "annotationsPath", Required = true, HelpText = "Path to ontology annotations file detaililing, e.g., version, license, etc.")]
+            public string AnnotationsPath { get; set; }*/
+            [Option('e', "endpointsPath", Required = true, HelpText = "Path to mappings CSV file matching REST endpoint names to DTDL Interfaces.")]
+            public string EndpointsPath { get; set; }
+            /*[Option('n', "namespaceAbbreviationsPath", Required = false, HelpText = "Path to file mapping ontology namespace prefixes to abbreviations.")]
+            public string NamespaceAbbreviationsPath { get; set; }*/
+            [Option('o', "outputPath", Required = true, HelpText = "The path at which to put the generated OAS and context files.")]
+            public string? OutputPath { get; set; }
         }
 
         // Configuration fields
-        private static string _server;
-        private static string _inputPath;
-        private static string _annotationsPath;
-        private static string _mappingsPath;
-        private static string _namespaceAbbreviationsPath;
-        private static string _outputPath;
+        private static string _server = string.Empty;
+        private static string _inputPath = string.Empty;
+        //private static string _annotationsPath;
+        private static string _endpointsPath = String.Empty;
+        //private static string _namespaceAbbreviationsPath;
+        private static string _nuspecPath = string.Empty;
+        private static string _outputPath = string.Empty;
 
         // Data fields
         private static IReadOnlyDictionary<Dtmi, DTEntityInfo> DTEntities;
         private static Dictionary<string, string> OntologyAnnotations = new();
-        private static Dictionary<string, string> NamespaceAbbreviations = new();
+        //private static Dictionary<string, string> NamespaceAbbreviations = new();
         private static Dictionary<string, Dtmi> EndpointMappings = new();
         private static OASDocument OutputDocument;
 
@@ -64,9 +70,11 @@ namespace DTDL2OAS
                    {
                        _server = o.Server;
                        _inputPath = o.InputPath;
-                       _annotationsPath = o.AnnotationsPath;
+                       /*_annotationsPath = o.AnnotationsPath;
                        _mappingsPath = o.MappingsPath;
-                       _namespaceAbbreviationsPath = o.NamespaceAbbreviationsPath;
+                       _namespaceAbbreviationsPath = o.NamespaceAbbreviationsPath;*/
+                       _endpointsPath = o.EndpointsPath;
+                       _nuspecPath = o.NuspecPath;
                        _outputPath = o.OutputPath;
                    })
                    .WithNotParsed((errs) =>
@@ -75,12 +83,14 @@ namespace DTDL2OAS
                    });
 
             LoadInput();
-            LoadAnnotations();
-            LoadMappings();
+            LoadNuspec();
+            LoadEndpointMappings();
+
+            /*
             if (_namespaceAbbreviationsPath != null)
             {
                 LoadNamespaceAbbreviations();
-            }
+            }*/
 
             // Create OAS object, create OAS info header, server block, (empty) components/schemas structure, and LoadedOntologies endpoint
             OutputDocument = new OASDocument
@@ -144,41 +154,29 @@ namespace DTDL2OAS
             }
         }
 
-        private static void LoadAnnotations()
+        private static void LoadNuspec()
         {
-            using (var reader = new StreamReader(_annotationsPath))
-            {
-                string[] annotations = reader.ReadToEnd().Split(Environment.NewLine);
-                foreach (string annotation in annotations)
-                {
-                    // Last line of file might be empty
-                    if (annotation.Length == 0) continue;
-                    string annotationKey = annotation.Split('=').First();
-                    string annotationValue = annotation.Substring(annotationKey.Length + 1);
-                    OntologyAnnotations.Add(annotationKey, annotationValue);
-                }
-            }
+            using var reader = new StreamReader(_nuspecPath);
+            using var xmlReader = XmlReader.Create(reader);
 
-            string[] mandatoryAnnotations = new string[]
-            {
-                "title",
-                "version",
-                "licenseName"
-            };
+            XmlDocument doc = new XmlDocument();
+            doc.Load(xmlReader);
+            XmlNamespaceManager namespaces = new XmlNamespaceManager(doc.NameTable);
+            namespaces.AddNamespace("nuspec", "http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd");
+            XmlElement docRoot = doc.DocumentElement;
+            // TODO: Sort out all the nullable warnings here
 
-            foreach (string mandatoryAnnotation in mandatoryAnnotations)
-            {
-                if (!OntologyAnnotations.ContainsKey(mandatoryAnnotation))
-                {
-                    Console.Error.WriteLine($"Mandatory ontology annotation '{mandatoryAnnotation}' is undefined.");
-                    Environment.Exit(1);
-                }
-            }
+            OntologyAnnotations.Add("id", docRoot.SelectSingleNode("/nuspec:package/nuspec:metadata/nuspec:id/text()", namespaces).Value);
+            OntologyAnnotations.Add("version", docRoot.SelectSingleNode("/nuspec:package/nuspec:metadata/nuspec:version/text()", namespaces).Value);
+            OntologyAnnotations.Add("description", docRoot.SelectSingleNode("/nuspec:package/nuspec:metadata/nuspec:description/text()", namespaces).Value);
+            OntologyAnnotations.Add("authors", docRoot.SelectSingleNode("/nuspec:package/nuspec:metadata/nuspec:authors/text()", namespaces).Value);
+
+            // TODO: Generically parse non-mandatory fields
         }
 
-        private static void LoadMappings()
+        private static void LoadEndpointMappings()
         {
-            using (var reader = new StreamReader(_mappingsPath))
+            using (var reader = new StreamReader(_endpointsPath))
             {
                 string mappingsCsv = reader.ReadToEnd();
                 string[] mappings = mappingsCsv.Split(Environment.NewLine);
@@ -199,64 +197,17 @@ namespace DTDL2OAS
             }
         }
 
-        private static void LoadNamespaceAbbreviations()
-        {
-            using (var reader = new StreamReader(_namespaceAbbreviationsPath))
-            {
-                string[] abbreviationMappings = reader.ReadToEnd().Split(Environment.NewLine);
-                foreach (string abbreviationMapping in abbreviationMappings)
-                {
-                    // Last line of file might be empty
-                    if (abbreviationMapping.Length == 0) continue;
-                    string namespacePrefix = abbreviationMapping.Split('=').First();
-                    string namespaceAbbreviation = abbreviationMapping.Substring(namespacePrefix.Length + 1);
-                    NamespaceAbbreviations.Add(namespacePrefix, namespaceAbbreviation);
-                }
-            }
-        }
-
         private static OASDocument.Info GenerateDocumentInfo()
         {
             OASDocument.Info docInfo = new OASDocument.Info();
 
             // Mandatory parts
-            docInfo.title = OntologyAnnotations["title"];
+            docInfo.title = OntologyAnnotations.ContainsKey("title") ? OntologyAnnotations["title"] : OntologyAnnotations["id"];
             docInfo.version = OntologyAnnotations["version"];
+            docInfo.description = OntologyAnnotations["description"];
+            docInfo.contact = new OASDocument.Contact() { name = OntologyAnnotations["authors"] };
 
-            // Licensing is non-mandatory; but if license element exists, name is mandatory
-            if (OntologyAnnotations.ContainsKey("licenseName"))
-            {
-                docInfo.license = new OASDocument.License();
-                docInfo.license.name = OntologyAnnotations["licenseName"];
-                if (OntologyAnnotations.ContainsKey("licenseUrl"))
-                {
-                    docInfo.license.url = OntologyAnnotations["licenseUrl"];
-                }
-            }
-
-            // Contact information; non-mandatory
-            if (OntologyAnnotations.ContainsKey("contactName") || OntologyAnnotations.ContainsKey("contactUrl") || OntologyAnnotations.ContainsKey("contactEmail"))
-            {
-                docInfo.contact = new OASDocument.Contact();
-                if (OntologyAnnotations.ContainsKey("contactName"))
-                {
-                    docInfo.contact.name = OntologyAnnotations["contactName"];
-                }
-                if (OntologyAnnotations.ContainsKey("contactUrl"))
-                {
-                    docInfo.contact.url = OntologyAnnotations["contactUrl"];
-                }
-                if (OntologyAnnotations.ContainsKey("contactEmail"))
-                {
-                    docInfo.contact.email = OntologyAnnotations["contactEmail"];
-                }
-            }
-
-            // Description; non-mandatory
-            if (OntologyAnnotations.ContainsKey("description"))
-            {
-                docInfo.description = OntologyAnnotations["description"];
-            }
+            // TODO: Set non-mandatory info
 
             return docInfo;
         }
@@ -409,20 +360,6 @@ namespace DTDL2OAS
                     { "hydra", hydraSchema },
                 }
             };
-            // Add each namespace abbreviation to the @context (sorting by shortname, e.g., dictionary value, for usability)
-            List<KeyValuePair<string, string>> namespaceAbbrevationsList = NamespaceAbbreviations.ToList();
-            namespaceAbbrevationsList.Sort((pair1, pair2) => string.CompareOrdinal(pair1.Value, pair2.Value));
-            foreach (KeyValuePair<string, string> namespaceAbbrevation in namespaceAbbrevationsList)
-            {
-                OASDocument.PrimitiveSchema importedVocabularySchema = new OASDocument.PrimitiveSchema
-                {
-                    type = "string",
-                    format = "uri",
-                    DefaultValue = namespaceAbbrevation.Key.ToString()
-                };
-                contextSchema.properties.Add(namespaceAbbrevation.Value, importedVocabularySchema);
-                contextSchema.required.Add(namespaceAbbrevation.Value);
-            }
             return contextSchema;
         }
 
@@ -446,8 +383,6 @@ namespace DTDL2OAS
             string versionLessDtmi = entityInfo.Id.Versionless;
             string entityNamespace = versionLessDtmi.Substring(0, versionLessDtmi.LastIndexOf(':'));
             string entityId = versionLessDtmi.Substring(versionLessDtmi.LastIndexOf(':') + 1);
-            if (NamespaceAbbreviations.ContainsKey(entityNamespace))
-                return NamespaceAbbreviations[entityNamespace] + ":" + entityId;
 
             return versionLessDtmi.Split(':').Last();
         }
