@@ -2,7 +2,7 @@
   "profiles": {
     "DTDL2OAS": {
       "commandName": "Project",
-      "commandLineArgs": "-i C:\\REC\\Ontology\\DTDLv2 -n C:\\REC\\Ontology\\RealEstateCore.Ontology.DTDLv2.nuspec -e C:\\REC\\API\\REST\\Endpoints.csv -o C:\\REC\\API\\REST\\REC4API.yaml"
+      "commandLineArgs": "-i C:\\REC\\Ontology\\DTDLv2 -n C:\\REC\\Generated\\RealEstateCore.Ontology.DTDLv2.nuspec -e C:\\REC\\API\\REST\\Endpoints.csv -o C:\\REC\\API\\REST\\"
     }
   }
 }

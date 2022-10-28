@@ -1,10 +1,8 @@
 ﻿using CommandLine;
 using Microsoft.Azure.DigitalTwins.Parser;
 using Microsoft.Azure.DigitalTwins.Parser.Models;
-using System.Text;
+using System.Text.Json;
 using System.Xml;
-using System.Xml.Linq;
-using System.Xml.XPath;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
@@ -21,12 +19,8 @@ namespace DTDL2OAS
             public string? InputPath { get; set; }
             [Option('n', "nuspecPath", Required = true, HelpText = "Path to .nuspec file holding package annotations detailing, e.g., version, license, etc.")]
             public string? NuspecPath { get; set; }
-            /*[Option('a', "annotationsPath", Required = true, HelpText = "Path to ontology annotations file detaililing, e.g., version, license, etc.")]
-            public string AnnotationsPath { get; set; }*/
             [Option('e', "endpointsPath", Required = true, HelpText = "Path to mappings CSV file matching REST endpoint names to DTDL Interfaces.")]
             public string EndpointsPath { get; set; }
-            /*[Option('n', "namespaceAbbreviationsPath", Required = false, HelpText = "Path to file mapping ontology namespace prefixes to abbreviations.")]
-            public string NamespaceAbbreviationsPath { get; set; }*/
             [Option('o', "outputPath", Required = true, HelpText = "The path at which to put the generated OAS and context files.")]
             public string? OutputPath { get; set; }
         }
@@ -34,16 +28,13 @@ namespace DTDL2OAS
         // Configuration fields
         private static string _server = string.Empty;
         private static string _inputPath = string.Empty;
-        //private static string _annotationsPath;
-        private static string _endpointsPath = String.Empty;
-        //private static string _namespaceAbbreviationsPath;
+        private static string _endpointsPath = string.Empty;
         private static string _nuspecPath = string.Empty;
         private static string _outputPath = string.Empty;
 
         // Data fields
         private static IReadOnlyDictionary<Dtmi, DTEntityInfo> DTEntities;
         private static Dictionary<string, string> OntologyAnnotations = new();
-        //private static Dictionary<string, string> NamespaceAbbreviations = new();
         private static Dictionary<string, Dtmi> EndpointMappings = new();
         private static OASDocument OutputDocument;
 
@@ -70,9 +61,6 @@ namespace DTDL2OAS
                    {
                        _server = o.Server;
                        _inputPath = o.InputPath;
-                       /*_annotationsPath = o.AnnotationsPath;
-                       _mappingsPath = o.MappingsPath;
-                       _namespaceAbbreviationsPath = o.NamespaceAbbreviationsPath;*/
                        _endpointsPath = o.EndpointsPath;
                        _nuspecPath = o.NuspecPath;
                        _outputPath = o.OutputPath;
@@ -85,12 +73,6 @@ namespace DTDL2OAS
             LoadInput();
             LoadNuspec();
             LoadEndpointMappings();
-
-            /*
-            if (_namespaceAbbreviationsPath != null)
-            {
-                LoadNamespaceAbbreviations();
-            }*/
 
             // Create OAS object, create OAS info header, server block, (empty) components/schemas structure, and LoadedOntologies endpoint
             OutputDocument = new OASDocument
@@ -114,7 +96,8 @@ namespace DTDL2OAS
                 .ConfigureDefaultValuesHandling(DefaultValuesHandling.OmitDefaults)
                 .Build();
             var yaml = serializer.Serialize(OutputDocument);
-            File.WriteAllText(_outputPath, yaml);
+            string yamlFile = $"{_outputPath}/{OntologyAnnotations["id"]}.yaml";
+            File.WriteAllText(yamlFile, yaml);
         }
 
         // Load a file or a directory of files from disk
@@ -164,14 +147,29 @@ namespace DTDL2OAS
             XmlNamespaceManager namespaces = new XmlNamespaceManager(doc.NameTable);
             namespaces.AddNamespace("nuspec", "http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd");
             XmlElement docRoot = doc.DocumentElement;
-            // TODO: Sort out all the nullable warnings here
+            // TODO: Sort out all the nullable warnings
 
             OntologyAnnotations.Add("id", docRoot.SelectSingleNode("/nuspec:package/nuspec:metadata/nuspec:id/text()", namespaces).Value);
             OntologyAnnotations.Add("version", docRoot.SelectSingleNode("/nuspec:package/nuspec:metadata/nuspec:version/text()", namespaces).Value);
             OntologyAnnotations.Add("description", docRoot.SelectSingleNode("/nuspec:package/nuspec:metadata/nuspec:description/text()", namespaces).Value);
             OntologyAnnotations.Add("authors", docRoot.SelectSingleNode("/nuspec:package/nuspec:metadata/nuspec:authors/text()", namespaces).Value);
 
-            // TODO: Generically parse non-mandatory fields
+            // Parse non-mandatory fields
+            XmlNode? titleNode = docRoot.SelectSingleNode("/nuspec:package/nuspec:metadata/nuspec:title/text()", namespaces);
+            if (titleNode != null)
+            {
+                OntologyAnnotations.Add("title", titleNode.Value ?? string.Empty);
+            }
+            XmlNode? licenseNode = docRoot.SelectSingleNode("/nuspec:package/nuspec:metadata/nuspec:license/text()", namespaces);
+            if (licenseNode != null)
+            {
+                OntologyAnnotations.Add("license", licenseNode.Value ?? string.Empty);
+            }
+            XmlNode? projectUrlNode = docRoot.SelectSingleNode("/nuspec:package/nuspec:metadata/nuspec:projectUrl/text()", namespaces);
+            if (projectUrlNode != null)
+            {
+                OntologyAnnotations.Add("projectUrl", projectUrlNode.Value ?? string.Empty);
+            }
         }
 
         private static void LoadEndpointMappings()
@@ -207,19 +205,34 @@ namespace DTDL2OAS
             docInfo.description = OntologyAnnotations["description"];
             docInfo.contact = new OASDocument.Contact() { name = OntologyAnnotations["authors"] };
 
-            // TODO: Set non-mandatory info
-
+            // Set non-mandatory info
+            if (OntologyAnnotations.ContainsKey("license"))
+            {
+                docInfo.license = new OASDocument.License() { name = OntologyAnnotations["license"] };
+            }
+            if (OntologyAnnotations.ContainsKey("projectUrl"))
+            {
+                docInfo.contact.url = OntologyAnnotations["projectUrl"];
+            }
             return docInfo;
         }
 
         private static void GenerateSchemas()
         {
-            foreach (Dtmi dtmi in EndpointMappings.Values)
+            IEnumerable<Dtmi> endpointDtmis = EndpointMappings.Values;
+            IEnumerable<DTInterfaceInfo> endpointInterfaces = DTEntities.Values.Where(entity => endpointDtmis.Contains(entity.Id) && entity is DTInterfaceInfo).Select(entity => (DTInterfaceInfo)entity);
+            IEnumerable <DTInterfaceInfo> componentInterfaces = endpointInterfaces
+                .SelectMany(iface => iface.Contents.Values)
+                .Where(contentInfo => contentInfo is DTComponentInfo)
+                .Select(componentInfo => ((DTComponentInfo)componentInfo).Schema);
+            IEnumerable<DTInterfaceInfo> SchemaInterfaces = endpointInterfaces.Concat(componentInterfaces).Distinct();
+            foreach (DTInterfaceInfo dtInterface in SchemaInterfaces)
             {
-                DTInterfaceInfo dtInterface = (DTInterfaceInfo)DTEntities[dtmi];
-                
                 // Get schema name
                 string schemaName = GetApiName(dtInterface).Replace(":", "_", StringComparison.Ordinal);
+
+                // Add self to context
+                Dictionary<string, string> JsonLdContext = new();
 
                 // Create schema for class and corresponding properties dict
                 OASDocument.ComplexSchema schema = new OASDocument.ComplexSchema();
@@ -238,6 +251,27 @@ namespace DTDL2OAS
                     DefaultValue = dtInterface.Id.AbsoluteUri
                 };
                 schema.properties.Add("@type", typeSchema);
+
+                // Add all contents to context file
+                foreach (var contentInfo in dtInterface.Contents.Values)
+                {
+                    JsonLdContext.Add(contentInfo.Name, contentInfo.Id.AbsoluteUri);
+                }
+                Dictionary<string, Dictionary<string, string>> ContextWrapper = new()
+                {
+                    {"@context", JsonLdContext }
+                };
+                string contextFile = $"{_outputPath}/contexts/{schemaName}.jsonld";
+                string contextString = JsonSerializer.Serialize(ContextWrapper, new JsonSerializerOptions() { WriteIndented = true });
+                File.WriteAllText(contextFile, contextString);
+
+                // Add reference to that context file
+                OASDocument.PrimitiveSchema contextSchema = new OASDocument.PrimitiveSchema
+                {
+                    type = "string",
+                    DefaultValue = $"https://dev.realestatecore.io/contexts/{schemaName}.jsonld"
+                };
+                schema.properties.Add("@context", contextSchema);
 
                 // Create relationship-based schema properties
                 foreach (DTRelationshipInfo relationship in dtInterface.AllRelationships())
@@ -278,6 +312,13 @@ namespace DTDL2OAS
 
                     }
                 }
+                foreach (DTComponentInfo component in dtInterface.AllComponents())
+                {
+                    string componentName = GetApiName(component);
+                    string componentSchemaName = GetApiName(component.Schema);
+                    OASDocument.ReferenceSchema componentReferenceSchema = new OASDocument.ReferenceSchema(componentSchemaName);
+                    schema.properties[componentName] = componentReferenceSchema;
+                }
                 foreach (DTPropertyInfo property in dtInterface.AllProperties())
                 {
                     string propertyName = GetApiName(property);
@@ -302,7 +343,6 @@ namespace DTDL2OAS
                             }
                         }
                     }
-
                     schema.properties[propertyName] = outputPropertySchema;
                 }
                 OutputDocument.components.schemas.Add(schemaName, schema);
@@ -378,12 +418,11 @@ namespace DTDL2OAS
         public static string GetApiName(DTEntityInfo entityInfo)
         {
             if (entityInfo is DTNamedEntityInfo)
-                return (entityInfo as DTNamedEntityInfo).Name;
+            {
+                return ((DTNamedEntityInfo)entityInfo).Name;
+            }
 
             string versionLessDtmi = entityInfo.Id.Versionless;
-            string entityNamespace = versionLessDtmi.Substring(0, versionLessDtmi.LastIndexOf(':'));
-            string entityId = versionLessDtmi.Substring(versionLessDtmi.LastIndexOf(':') + 1);
-
             return versionLessDtmi.Split(':').Last();
         }
     }
